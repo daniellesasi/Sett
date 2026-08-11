@@ -20,6 +20,11 @@ body { font-family:system-ui,sans-serif; background:#5a5a5a; color:#fff; height:
 .btn.g { background:#00bb44; color:#000; border-color:#00bb44; font-weight:700; }
 .btn.g:hover { background:#009933; }
 .btn:disabled { opacity:.2; pointer-events:none; }
+/* Shows the repo this editor pushes to — text is set from REPO at init so it can never
+   disagree with the real push target. Guards against editing the wrong site when more
+   than one copy of the editor is open. */
+#repo-badge { font-size:.66rem; letter-spacing:1px; color:#0b0b0b; background:#ffb84d; border-radius:3px; padding:3px 8px; font-weight:bold; white-space:nowrap; }
+#repo-badge.preview { background:#666; color:#ddd; }
 #st { font-size:.72rem; color:#aaa; }
 #st.ok { color:#00ee66; }
 #st.er { color:#f66; }
@@ -141,6 +146,7 @@ body { font-family:system-ui,sans-serif; background:#5a5a5a; color:#fff; height:
 
 <div id="hdr">
   <h1>Sett Editor</h1>
+  <span id="repo-badge"></span>
   <input class="inp" id="tok" type="password" placeholder="GitHub Personal Access Token">
   <button class="btn w" onclick="load()">Load</button>
   <button class="btn g" id="saveBtn" onclick="saveAll()" disabled>Push to GitHub</button>
@@ -246,7 +252,12 @@ body { font-family:system-ui,sans-serif; background:#5a5a5a; color:#fff; height:
 
 <script>
 console.log('🔧 Editor v2026-05-05-source-safe loaded');
-const REPO='daniellesasi/Sett', BRANCH='main', BASE='https://daniellesasi.github.io/Sett/';
+const REPO='daniellesasi/Sett', BRANCH='main';
+// Media previews resolve against BASE. Off the live host, resolve them relative to the
+// page instead — the media sits next to this file locally, so previews work before the
+// site is ever published (the absolute BASE would 404 until then).
+const LIVE_HOST='daniellesasi.github.io';
+const BASE = location.hostname===LIVE_HOST ? `https://${LIVE_HOST}/Sett/` : '';
 const PORTS=['a1','a2'], NB=12;
 
 // Basenames (no extension) that have both a .png and a .jpg version uploaded to the repo.
@@ -259,7 +270,7 @@ const extOf = f => ((f||'').match(/\.([^.]+)$/)||[,''])[1].toLowerCase();
 // When opened from a local server or file:// (i.e. not the real GitHub Pages host),
 // "saving" is a no-op — lets you click around (including the format toggle) without
 // pushing anything to the live repo. Loading is still a real (read-only) GitHub fetch.
-const PREVIEW_MODE = location.hostname!=='daniellesasi.github.io';
+const PREVIEW_MODE = location.hostname!==LIVE_HOST;
 
 let token='', idxSha='', idxHTML='';
 // sections[id] = [ { layers:[ {id,type,src,preview,b64,filename,x,y,w,h,rot,z,fit} ] } ]
@@ -1162,7 +1173,10 @@ function toggleCanvasBg(){
 window.addEventListener('resize',()=>{ positionCanvas(); if(selId){const l=getLayer(selId);if(l)updateSelBox(l);} });
 window.onload=()=>{
   const t=localStorage.getItem('gh_t'); if(t)$('tok').value=t;
-  if(PREVIEW_MODE){ $('saveBtn').textContent='Push to GitHub (preview — disabled)'; st('🧪 Preview mode — Load is real, saving is a no-op',''); }
+  // Label the badge from REPO itself, so what you read is always what Load/Push targets
+  $('repo-badge').textContent=REPO;
+  $('repo-badge').title=`This editor loads from and pushes to ${REPO} (${BRANCH})`;
+  if(PREVIEW_MODE){ $('saveBtn').textContent='Push to GitHub (preview — disabled)'; $('repo-badge').classList.add('preview'); $('repo-badge').textContent=REPO+' · preview'; st('🧪 Preview mode — Load is real, saving is a no-op',''); }
 };
 </script>
 </body>
