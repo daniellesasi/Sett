@@ -1,3 +1,8 @@
 .DS_Store
 *.textClipping
 _media_backup/
+
+# Working folder for source videos being compressed — masters and their
+# compressed output are not site assets. Move a finished file into the repo
+# root under the a1bNcM naming scheme when it actually goes on a slide.
+to compress/
