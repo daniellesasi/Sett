@@ -23,6 +23,11 @@ body { font-family:system-ui,sans-serif; background:#5a5a5a; color:#fff; height:
 /* Shows the repo this editor pushes to — text is set from REPO at init so it can never
    disagree with the real push target. Guards against editing the wrong site when more
    than one copy of the editor is open. */
+/* Live count of galleries visible on the site. The site is designed around 12; going
+   over doesn't break anything server-side but the numbered side-menu starts to clip
+   on short viewports, so flag it rather than silently allow it. */
+#active-count { font-size:.7rem; letter-spacing:1px; color:#aaa; margin-left:14px; align-self:center; }
+#active-count.over { color:#ffb84d; font-weight:bold; }
 #repo-badge { font-size:.66rem; letter-spacing:1px; color:#0b0b0b; background:#ffb84d; border-radius:3px; padding:3px 8px; font-weight:bold; white-space:nowrap; }
 #repo-badge.preview { background:#666; color:#ddd; }
 #st { font-size:.72rem; color:#aaa; }
@@ -157,7 +162,7 @@ body { font-family:system-ui,sans-serif; background:#5a5a5a; color:#fff; height:
 
 <div id="app">
   <div id="grid-view">
-    <div class="tabs"><div class="tab active">Galleries</div></div>
+    <div class="tabs"><div class="tab active">Galleries</div><span id="active-count"></span></div>
     <div class="warn">Files over 25 MB can't be uploaded via GitHub API — compress large videos first.</div>
     <div class="sg" id="sg0"></div>
     <div class="sg" id="sg1" style="display:none"></div>
@@ -258,7 +263,13 @@ const REPO='daniellesasi/Sett', BRANCH='main';
 // site is ever published (the absolute BASE would 404 until then).
 const LIVE_HOST='daniellesasi.github.io';
 const BASE = location.hostname===LIVE_HOST ? `https://${LIVE_HOST}/Sett/` : '';
-const PORTS=['a1','a2'], NB=12;
+// NB = how many gallery slots exist in the repo (the "backend" count). Slots beyond the
+// 12 shown on the site sit in the HTML as <section ... class="project-section draft">
+// and are toggled with each card's Hide/Show button. The nav numbers only visible ones,
+// so the live site keeps its 12-gallery shape however many slots exist here.
+// Raising NB alone is not enough — each new id needs an empty <section> scaffold in
+// index.html, because buildHTML only ever replaces sections that already exist.
+const PORTS=['a1','a2'], NB=24, VISIBLE_TARGET=12;
 
 // Basenames (no extension) that have both a .png and a .jpg version uploaded to the repo.
 // PNGs with real transparency were intentionally left PNG-only (JPEG can't hold alpha),
@@ -346,8 +357,11 @@ function parseHTML(){
           const isDraft=frame.classList.contains('draft');
           frame.querySelectorAll('img,video').forEach((el,li)=>{
             const s=el.getAttribute('style')||'';
-            const lx=parseFloat((s.match(/left:([\d.]+)%/)||[,0])[1]);
-            const ly=parseFloat((s.match(/top:([\d.]+)%/)||[,0])[1]);
+            // -? matters: layers are deliberately bled off-canvas with negative offsets.
+            // Without it the match fails, the fallback silently wins, and the next push
+            // rewrites the layer to 0% — moving artwork on the live site.
+            const lx=parseFloat((s.match(/left:(-?[\d.]+)%/)||[,0])[1]);
+            const ly=parseFloat((s.match(/top:(-?[\d.]+)%/)||[,0])[1]);
             const lw=parseFloat((s.match(/width:([\d.]+)%/)||[,100])[1]);
             const lh=parseFloat((s.match(/height:([\d.]+)%/)||[,100])[1]);
             const lr=parseFloat((s.match(/rotate\(([-\d.]+)deg\)/)||[,0])[1]);
@@ -366,8 +380,8 @@ function parseHTML(){
           });
           frame.querySelectorAll('.txt-layer').forEach((el,li)=>{
             const s=el.getAttribute('style')||'';
-            const lx=parseFloat((s.match(/left:([\d.]+)%/)||[,10])[1]);
-            const ly=parseFloat((s.match(/top:([\d.]+)%/)||[,35])[1]);
+            const lx=parseFloat((s.match(/left:(-?[\d.]+)%/)||[,10])[1]);
+            const ly=parseFloat((s.match(/top:(-?[\d.]+)%/)||[,35])[1]);
             const lw=parseFloat((s.match(/width:([\d.]+)%/)||[,80])[1]);
             const lh=parseFloat((s.match(/height:([\d.]+)%/)||[,30])[1]);
             const lr=parseFloat((s.match(/rotate\(([-\d.]+)deg\)/)||[,0])[1]);
@@ -449,6 +463,20 @@ function renderGrid(){
       g.appendChild(el);
     });
   });
+  updateActiveCount();
+}
+
+// Galleries live on the site = port1 sections not marked hidden.
+function updateActiveCount(){
+  const el=$('active-count'); if(!el) return;
+  const order=sectionOrder[0]||[];
+  const live=order.filter(id=>!sectionHidden[id]).length;
+  const over=live>VISIBLE_TARGET;
+  el.textContent=`${live} live · ${order.length} slots`+(over?`  ⚠ over ${VISIBLE_TARGET}`:'');
+  el.classList.toggle('over',over);
+  el.title=over
+    ? `${live} galleries are live. The site is designed for ${VISIBLE_TARGET} — the numbered side-menu may clip on short screens.`
+    : `${live} of ${order.length} gallery slots are live on the site.`;
 }
 function toggleSectionHidden(e, id){
   e.stopPropagation();
