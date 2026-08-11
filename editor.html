@@ -100,6 +100,12 @@ body { font-family:system-ui,sans-serif; background:#5a5a5a; color:#fff; height:
 .tp-row label { flex:1; }
 .tp-tog { padding:3px 8px; background:#555; border:none; color:#aaa; border-radius:4px; cursor:pointer; font-size:.65rem; }
 .tp-tog.on { background:#00cc66; color:#000; }
+/* Black / white text swatches. Each previews its own result — a black "A" on white and
+   a white "A" on black — so the choice is readable without a colour dialog. The green
+   ring marks which one the selected layer currently matches. */
+.tp-swatch { width:30px; height:26px; border:1px solid #777; border-radius:4px; cursor:pointer; font-size:.8rem; font-weight:bold; line-height:1; padding:0; flex:0 0 auto; background:#fff; color:#000; }
+.tp-swatch.light { background:#111; color:#fff; }
+.tp-swatch.on { border-color:#00cc66; box-shadow:0 0 0 2px #00cc66; }
 
 #canvas-wrap { flex:1; position:relative; overflow:hidden; background:#666; }
 #canvas { position:absolute; background:#000; overflow:hidden; cursor:default; }
@@ -199,9 +205,11 @@ body { font-family:system-ui,sans-serif; background:#5a5a5a; color:#fff; height:
             <option value="Georgia">Georgia</option>
             <option value="Arial">Arial</option>
           </select>
+          <label>Color</label>
           <div class="tp-row">
-            <label>Color</label>
-            <input type="color" id="tp-color" value="#ffffff" oninput="updateTextProp('color',this.value)">
+            <button class="tp-swatch" id="tp-black" onclick="setTextColor('#000000')" title="Black text — works on locked layers; the lock only stops dragging">A</button>
+            <button class="tp-swatch light" id="tp-white" onclick="setTextColor('#ffffff')" title="White text — works on locked layers; the lock only stops dragging">A</button>
+            <input type="color" id="tp-color" value="#ffffff" oninput="updateTextProp('color',this.value);syncColorSwatches(this.value)">
           </div>
           <div class="tp-row">
             <button class="tp-tog" id="tp-bold" onclick="toggleTextProp('bold','tp-bold')">B</button>
@@ -213,7 +221,7 @@ body { font-family:system-ui,sans-serif; background:#5a5a5a; color:#fff; height:
             <button class="tp-tog" onclick="snapText('title')" title="Snap to title slot (top-left, large bold)">Title</button>
             <button class="tp-tog" onclick="snapText('body')" title="Snap to body slot (left column, small)">Body</button>
             <button class="tp-tog" onclick="snapText('tools')" title="Snap to tools/credits caption slot (bottom-left, small italic)">Tools</button>
-            <button class="tp-tog" id="tp-lock" onclick="toggleLock()" title="Lock so it can't be dragged">🔒</button>
+            <button class="tp-tog" id="tp-lock" onclick="toggleLock()" title="Lock position — stops dragging/resizing/rotating only. Text, colour, size and font stay editable while locked.">🔒</button>
           </div>
         </div>
         <div id="media-props">
@@ -641,7 +649,16 @@ function selectLayer(lid,e){
   $('sel-box').style.display='block';
   showTextProps(layer);
 }
-function selectLayerById(lid){ selId=lid; renderLayers(); const layer=getLayer(lid); if(layer){updateSelBox(layer);showTextProps(layer);} $('sel-box').style.display=selId?'block':'none'; showSlide(activeSlide); }
+// showSlide() must run BEFORE the selection is set: its second statement is
+// `selId=null; hideSel()`, so re-rendering afterwards silently undid the select and
+// closed the properties panel — which made locked text look uneditable.
+function selectLayerById(lid){
+  showSlide(activeSlide);
+  selId=lid; renderLayers();
+  const layer=getLayer(lid);
+  if(layer){updateSelBox(layer);showTextProps(layer);}
+  $('sel-box').style.display=selId?'block':'none';
+}
 
 function showTextProps(layer){
   const tp=$('text-props'), mp=$('media-props');
@@ -743,6 +760,7 @@ function syncTextProps(layer){
   $('tp-fs-val').textContent=layer.fontSize||4;
   $('tp-font').value=layer.fontFamily||'Anton';
   $('tp-color').value=layer.color||'#ffffff';
+  syncColorSwatches(layer.color||'#ffffff');
   $('tp-bold').classList.toggle('on',!!layer.bold);
   $('tp-italic').classList.toggle('on',!!layer.italic);
   $('tp-lock').classList.toggle('on',!!layer.locked);
@@ -907,6 +925,23 @@ function updateTextProp(prop, val){
     else txt.style.cssText=textLayerCSS(layer)+'width:100%;height:100%;box-sizing:border-box;padding:4px 8px;';
   }
   renderLayers(); queuePush();
+}
+
+// One-click black/white. Deliberately does NOT check layer.locked — the lock guards
+// position only, so colour stays editable on the locked title/body/tools slots.
+function setTextColor(hex){
+  const layer=getLayer(selId); if(!layer||layer.type!=='text')return;
+  $('tp-color').value=hex;
+  updateTextProp('color',hex);
+  syncColorSwatches(hex);
+}
+
+// Ring the swatch matching the layer's current colour (tolerates #FFF / #ffffff casing).
+function syncColorSwatches(hex){
+  const h=(hex||'').trim().toLowerCase();
+  const norm = h.length===4 ? '#'+h[1]+h[1]+h[2]+h[2]+h[3]+h[3] : h;
+  $('tp-black').classList.toggle('on', norm==='#000000');
+  $('tp-white').classList.toggle('on', norm==='#ffffff');
 }
 
 function toggleTextProp(prop, btnId){
